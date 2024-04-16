@@ -1,0 +1,240 @@
+---
+title: 'Diagrama de Lexis utilizando <img src="Rstudio_logo.png"  height=65 width=65/> '
+author: "Gabriel Reis"
+date: "07 de janeiro de 2024"
+output:
+  ioslides_presentation:
+    logo: UnB_logo.png
+    widescreen: true
+    css: Estilos.css
+    pdf_document: default
+---
+
+```{r setup, include=FALSE}
+setwd(getwd())
+knitr::opts_chunk$set(echo = FALSE)
+library(png)
+library(tidyverse)
+library(lubridate)
+library(ggplot2)
+library(LexisPlotR)
+load("DODF.RDATA")
+```
+
+## Carregando os Pacotes Necessários:
+
+-   Quando for desenvolver seu código tenha em mente o caráter de **Reprodutibilidade**, informando sempre os pacotes necessários para execução do script, bem como as bases de dados utilizadas na análise.
+
+```{r echo=TRUE, message=FALSE}
+if (!require("pacman"))
+  install.packages("pacman")
+pacman::p_load(tidyverse, LexisPlotR, lubridate, read.dbc)
+
+```
+
+> -   tidyverse (Manipulaçao)
+> -   LexisPlotR (Fazer os gráficos)
+> -   lubridate (Manipular datas)
+> -   read.dbc (Leitura dos dados)
+
+# Diagrama de Lexis {#azul}
+
+## Definição
+
+::: columns-3
+```{=html}
+<div align="justify">Desenvolvido pelo economista, <bdi class=red> estatístico </bdi> e matemático alemão Wilhelm Lexis (1837-1914), é uma forma gráfica de representar dados demográficos em função de momento, idade e coorte. <br>
+```
+:::
+
+::: columns-2
+<!-- ![DATASUS_logo](lexisdiagram.jpg) -->
+  
+  <img src="lexisdiagram.jpg" height="400" />
+> -  
+```{=html}
+ <br>
+<bdi class=blue>Coorte</bdi> - conjunto de indivíduos que compartilham um mesmo acontecimento de origem
+```
+
+
+:::
+
+
+# Estatísticas Vitais
+
+## Conceitos:
+
+Segundo as Nações Unidas, Estatística Vital é aquela que trata dos "eventos ou fatos vitais", entre os quais se incluem o nascimento vivo e o óbito.
+
+> -   <bdi style="font-size:120%" class=red> SIM </bdi> - Sistema de Informações de Mortalidade.
+> -   <bdi style="font-size:120%" class=red> SINASC </bdi> - Sistema de Informações de Nascidos Vivos.
+
+## Armazenamento das informações:
+
+::: columns-2
+<!-- ![DATASUS_logo](DATASUS_logo.png) -->
+
+<img src="DATASUS_logo.png" height="200" width="400/"/>
+
+-   <div align="justify">
+
+    DATASUS é o departamento de informática do Sistema Único de Saúde do Brasil.
+
+-   <https://datasus.saude.gov.br/>
+
+-   <https://datasus.saude.gov.br/transferencia-de-arquivos/>
+
+    </div>
+:::
+
+## Página Principal
+
+::: columns-3
+![](datasus_site.png){width="557"}
+
+1.  Tabnet - Tabelas rapidas
+2.  Tabwin - Download dos dados brutos
+:::
+
+## Tabwin - Transferência de Arquivos:
+
+![](sim_dowload.png){width="700"}
+
+## Leitura dos dados:
+
+```{r eval=FALSE, echo= TRUE }
+
+DODF <- read.dbc("DODF2010.dbc")
+
+```
+
+```{r echo=TRUE}
+glimpse(DODF)
+```
+
+## Ajuste da Base:
+
+::: {style="display: flex; flex-direction: row;"}
+::: {style="flex: 1;"}
+```{r echo=TRUE}
+    sim_idade <- function(x) {
+      # Funçao para idade
+      if (str_sub(x, 1, 1) < 4) {
+        x = 0
+      } else if (str_sub(x, 1, 1) == 4) {
+        x =  0 + as.numeric(str_sub(x, 2))
+      }
+      else if (str_sub(x, 1, 1) == 5) {
+        x = 100 + as.numeric(str_sub(x, 2))
+      }
+      else{
+        x = NA
+      }
+      return(x)
+    }
+```
+:::
+
+::: {style="flex: 1;"}
+<img src="sim_imagem.png" width="202"/>\
+:::
+:::
+
+## Ajuste da Base: {style="table {margin-left: auto;margin-right: auto; }"}
+
+```{r echo=TRUE}
+DODFA <- DODF %>% select(DTOBITO, SEXO, DTNASC, CODMUNRES, IDADE) %>%
+  mutate(DTOBITO = dmy(DTOBITO),
+         DTNASC = dmy(DTNASC))
+
+DODFA$IDADEA <- sapply(DODF$IDADE, sim_idade)
+
+```
+
+```{r echo=TRUE, fig.align='center' }
+head(DODFA)
+```
+
+## Criando arquivo de uso:
+
+```{r echo=TRUE}
+dados2 <- DODFA %>%
+  mutate(
+         IDOBITO= as.numeric(difftime(DTOBITO, DTNASC, units = "days")/365),
+         ano_nasc=year(DTNASC),
+         ano_obito=year(DTOBITO),
+         id_ob_anos_comp=floor(IDOBITO)) %>%
+  group_by(id_ob_anos_comp, ano_nasc, ano_obito, SEXO) %>%
+  mutate(quantidade=n()) %>%
+  ungroup() %>%
+  distinct(id_ob_anos_comp,SEXO, ano_nasc, ano_obito, .keep_all = T) %>%
+  select(id_ob_anos_comp, ano_nasc,SEXO, ano_obito, quantidade) %>%
+  arrange(ano_obito, desc(ano_nasc), id_ob_anos_comp,SEXO)
+```
+
+## Resultado:
+
+```{r echo=TRUE, message=TRUE, warning=FALSE}
+head(dados2)
+```
+
+## Comando basico do lexis:
+
+```{r echo=TRUE, fig.align='center'}
+diagram_df <- lexis_grid(year_start = 2010, year_end = 2016, age_start = 0, age_end = 5)
+diagram_df
+```
+
+## Colocar os Valores no Diagrama:
+
+```{r}
+load("dados2.rdata")
+```
+
+```{r echo=TRUE, warning=FALSE}
+diagram_df <- diagram_df +
+  annotate(geom="text", x=as.Date(paste0(dados2$ano_obito[dados2$TRI==0 & dados2$SEXO==2]
+                                         ,"-08-06"))
+                     ,y=dados2$id_ob_anos_comp[dados2$TRI==0 & dados2$SEXO==2]+0.3,
+                     label=c(paste0(dados2$quantidade[dados2$TRI==0 & dados2$SEXO==2])),
+                     color="black") +
+  annotate(geom="text", x=as.Date(paste0(dados2$ano_obito[dados2$TRI==1 & dados2$SEXO==2]
+                                         ,"-05-06"))
+                     ,y=dados2$id_ob_anos_comp[dados2$TRI==1 & dados2$SEXO==2]+0.75,
+                     label=c(paste0(dados2$quantidade[dados2$TRI==1 & dados2$SEXO==2])),
+                     color="black")
+
+```
+
+## RESULTADO:
+
+```{r echo=TRUE, warning=FALSE, fig.align='center'}
+diagram_df
+```
+
+## Selecionar uma coorte:
+
+```{r echo=TRUE, warning=FALSE, fig.align='center'}
+lexis_cohort(diagram_df,cohort = 2012)
+
+```
+
+## Selecionar idade:
+
+```{r echo=TRUE, warning=FALSE, fig.align='center'}
+lexis_age(diagram_df,age = 3)
+```
+
+## Selecionar ano:
+
+```{r echo=TRUE, warning=FALSE, fig.align='center'}
+
+lexis_year(diagram_df,year = 2012)
+```
+
+## Selecionar linha de vida:
+
+```{r echo=TRUE, warning=FALSE, fig.align='center'}
+lexis_lifeline(diagram_df,birth = "2012-09-23", exit = "2014-10-31")
+```
